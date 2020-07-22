@@ -1,4 +1,4 @@
-# Data Warehouse - Sparkify Relational database
+# Data Warehouse - Sparkify Redshift
 ***
 Project Description
 A music streaming startup called Sparkify would like to get more comprehensible meannings of its customers behavior. <br>
