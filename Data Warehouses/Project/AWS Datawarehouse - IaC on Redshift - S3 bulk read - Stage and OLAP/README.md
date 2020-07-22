@@ -168,7 +168,7 @@ JSON 's3://udacity-dend/log_json_path.json'
 timeformat 'epochmillisecs';
 """).format(ARN)
 ```
-<font size=2>*PS: above copy uses the JSON metadata description file `s3://udacity-dend/log_json_path.json` to describe the JSON files, it may be needed to make the reading easy for Redshift. In the case of `stg_songs` table it was not needed.*</font>
+*PS: above copy uses the JSON metadata description file `s3://udacity-dend/log_json_path.json` to describe the JSON files, it may be needed to make the reading easy for Redshift. In the case of `stg_songs` table it was not needed.*
 
 ```
 COPY stg_songs
