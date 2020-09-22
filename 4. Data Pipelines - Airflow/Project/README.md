@@ -78,9 +78,9 @@ One could pay attention to it and investigate if some fine tunning could be poss
 1. *Install Airflow locally.*<br>
 Point the DAGs directory to this project DAG folder or copy `sparkify_dw_populate_dag.py` to the Airflow DAG folder.<br>
 Same goes to the `plugins` folder content.<br>
-2. *Redshift DataWarehouse*
+2. *Redshift DataWarehouse*<br>
 Go to your AWS console, create the Redshift datawarehouse and execute the `airflow/create_tables.sql` to create the tables.<br>
-3. *Configure Airflow*
+3. *Configure Airflow*<br>
 Configure Airflow environment variables to use your AWS account as well as Redshift connection.
 
 
