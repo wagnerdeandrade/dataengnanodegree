@@ -1,143 +1,75 @@
-# Spark Data Lake - Sparkify
+# Airflow Data Pipeline - Sparkify
 ***
 Project Description
 A music streaming startup called Sparkify would like to get more comprehensible meannings of its customers behavior. <br>
 To achieve this goal Sparkify decided to move their growing user and song databases, as well as their ETL processes onto the cloud.<br>
-Their raw data resides in an S3 bucket, inside two objects (directories):  <br>
+Their raw data resides in an S3 bucket, inside two objects (similar to directories):  <br>
 1. A directory of JSON logs on user activity inside the app (called events in this context)
 2. A directory with JSON metadata describing the songs available in Sparkify app.
 
-This repository contains the code that creates Sparkify analytical infrastructure on AWS as an S3 Data Lake moving its unstructured JSON data to a kind of Star Schema (Analytical schema) columnar storage in parquet files.
+This repository contains the code that creates Sparkify analytical datawarehouse (Redshift) ETLing the data via an Airflow pipeline.
 
-### 1. Data Lake
-#### 1.1 Staging views
-Staging refers to a step in between, an intermediate state. Spark offers the possibility to create temporary views using createOrReplaceTempView().
-Using this function we load all the unstructured JSON files in Spark dataframes `songs_stg` and `logs_stg` so that it would be much easier to select data from
-and create the OLAP parquet data lake.
+### 1. Pipeline design
+#### 1.1 DAG
+Sparkify data pipeline DAG is described by the following image:
 
-The data loaded from song data and log data are structured on Spark temporary views as:
+![Airflow DAG](images/dag.jpg)
 
-`logs_stg`
-- **artist**        StringType,
-- **auth**          StringType,
-- **firstName**     StringType,
-- **gender**        StringType,
-- **itemInSession** IntegerType,
-- **lastName**      StringType,
-- **length**        DoubleType,
-- **level**         StringType,
-- **location**      StringType,
-- **method**        StringType,
-- **page**          StringType,
-- **registration**  DoubleType,
-- **sessionId**     DoubleType,
-- **song**          StringType,
-- **status**        DoubleType,
-- **ts**            DoubleType,
-- **userAgent**     StringType,
-- **userId**        StringType
+#### 1.2 Staging steps
+Staging refers to a step in between, an intermediate state. This step is responsible to extract Sparkify data from S3 buckets and create staging tables on Redshift.
+These staging tables are very important in order to make the target OLAP datawarehouse computation easier, from stg to target tables instead of from S3 to target tables.
 
-`songs_stg`
-- **num_songs**        IntegerType,
-- **artist_id**        StringType,
-- **artist_latitude**  DoubleType,
-- **artist_longitude** DoubleType
-- **artist_location**  StringType
-- **artist_name**      StringType,
-- **song_id**          StringType,
-- **title**            StringType,
-- **duration**         DoubleType,
-- **year**             IntegerType
+From the DAG picture, staging tables are created in the parallel tasks **Stage_events** and **Stage_songs**.
+
+The data loaded from song and logs (events) S3 directories are structured in datawarehouse staging tables as:
+
+`staging_events`
+- **artist**        varchar(256),
+- **auth**          varchar(256),
+- **firstName**     varchar(256),
+- **gender**        varchar(256),
+- **itemInSession** int4,
+- **lastName**      varchar(256),
+- **length**        numeric(18,0),
+- **level**         varchar(256),
+- **location**      varchar(256),
+- **method**        varchar(256),
+- **page**          varchar(256),
+- **registration**  numeric(18,0),
+- **sessionId**     int4,
+- **song**          varchar(256),
+- **status**        int4,
+- **ts**            int8,
+- **userAgent**     varchar(256),
+- **userId**        int4
+
+`staging_songs`
+- **num_songs**        int4,
+- **artist_id**        varchar(256),
+- **artist_latitude**  numeric(18,0),
+- **artist_longitude** numeric(18,0)
+- **artist_location**  varchar(256)
+- **artist_name**      varchar(256),
+- **song_id**          varchar(256),
+- **title**            varchar(256),
+- **duration**         numeric(18,0),
+- **year**             int4
 
 
-#### 1.2 Parquet S3 Data Lake
+#### 1.3 OLAP Star Schema datawarehouse
 The Sparkify data lake was modeled following a Star Schema (https://en.wikipedia.org/wiki/Star_schema) because it is a well-known denormalized easy to use database design schema for OLAP.
 The star schema is simple and perfectly meets Sparkify needs.
 
-**Fact table:**<br>
-`songplays`<br>
-- **start_time**
-- **user_id**   
-- **level**       
-- **song_id**     
-- **artist_id**   
-- **session_id**   
-- **location**    
-- **user_agent**  
+![Star schema datawarehouse](images/star_schema.png)
 
-**Dimension tables:**<br>
-`users`<br>
-- **user_id**    
-- **first_name**
-- **last_name**  
-- **gender**     
-- **level**      
+The fact table is created in the DAG task **Load_songplays_fact_table**.
+Dimension tables are created in the parallel tasks **Load_user_dim_table**, **Load_artist_dim_table**, **Load_song_dim_table** and **Load_time_dim_table**.
 
-`songs`<br>
-- **song_id**   
-- **title**     
-- **artist_id**
-- **year**      
-- **duration**  
+#### 1.4 Data quality checks
+Last but not least, the data loaded into the datawarehouse is checked to check if it is fine, if everything goes well.
+This is done simply by checking if there are records in the tables but many more checks could be done to guarantee the data integrity.
 
-`artists`<br>
-- **artist_id**
-- **name**      
-- **location**  
-- **latitude**   
-- **longitude**
-
-`time`<br>
-- **start_time**
-- **hour**       
-- **day**        
-- **week**       
-- **month**      
-- **year**       
-- **weekday**    
-
-## Project description
-The logic behind this project is very simple, it uses Spark to process Sparkify JSON logs and song files.
-Creating Spark temporary views of those files, it retrieves our target OLAP Star Schema Data lake in the form of Spark DataFrames (Spark RDD is no longer recommended) via SQL queries on those views. <br>
-Then, again using Spark it cleans the DataFrames to keep only the necessary data and save it on S3 in Parquet Columnar format. Each table has its own folder within the directory. <br>
-Songs table files are partitioned by year and then artist. <br>
-Time table files are partitioned by year and month. <br>
-Songplays table files are partitioned by year and month.
-
-## How to Run
-***
-There are **three** possible execution modes:
-1. **LOCAL**<br>
-Runs locally using the data inside /data .zip files - this is important to debug the ETL business logic. <br><br>
-2. **LOCAL_S3**<br>
-Runs locally using S3 `udacity-dend` bucket data, downloads the data files, process locally and upload it back to user specific s3 bucket `dend-nano-spark-datalake`.<br><br>
-3. **REMOTE** (***Recommended***)<br>
-Launch an EMR cluster and execute this project totally on AWS, from S3 to EMR cluster than back saving the data lake into s3 `dend-nano-spark-datalake` bucket. This is the recommended mode because it runs on the full S3 udacity dataset but quickly, using EMR take around 20 minutes of Spark execution. This script shut down the EMR cluster after the execution.
-Local S3 mode takes a long time to finish its execution.<br>
-
-1. Choose your execution mode and change `dl.cfg` file adding the mode you choose:
-
-`[EXECUTION_MODE]<br>
-mode=<>`
-
-2. Still in the same `dl.cfg` file, if you choose to execute `LOCAL_S3` or `REMOTE` add your AWS credentials
-
-`[AWS_ACCOUNT]<br>
-aws_access_key_id = <> <br>
-aws_secret_access_key = <>`
-
-3. Launch a shell and run
-`python3 etl.py`
-
-## Project organization
-***
-```
-project
-│
-└───data - Zip files, used to local debug
-│   bootstrap.sh - Bootstrap file used on EMR cluster launch, it basically install boto3 library into EMR nodes.
-│   dl.cfg - Configuration file used throughout the project to consume global configurations.
-│   etl.py - Extract information from S3 Sparkify files, load into the staging views and then copy only the analytical relevant data into sparkify OLAP parquet data lake.
-│   README.md - This README file.
-└───sql_queries.py - Contains all SQL queries used in this project.
-```
+#### 1.5 Note
+From below picture you can see that for some reason the task **Stage_songs** is taking a long time to execute.
+One could pay attention to it and investigate if some fine tunning could be possible.
+![Star schema datawarehouse](images/gantt.jpg)
